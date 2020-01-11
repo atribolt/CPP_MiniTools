@@ -1,3 +1,4 @@
+
 #include <cmath>
 #include <ctime>
 #include <tuple>
@@ -7,8 +8,10 @@
 #include <cassert>
 #include <fstream>
 #include <sstream>
+#include <variant>
 #include <iterator>
 #include <iostream>
+#include <optional>
 #include <algorithm>
 #include <functional>
 
@@ -23,7 +26,7 @@ using Texs   = vector<_tex>;
 using Layers = vector<_layer>;
 using Data   = tuple<Texs, Layers>;
 
-#pragma region >>> Изменение объектов
+#pragma region >>> Вспомогательные функции
 /* 
    распаковывает пакет с парами имен и размеров атласов в пакет имен и пакет размеров
    >> src_beg  ---> начало пакета запакованных структур
@@ -66,8 +69,6 @@ void Pack_Texs (
       *where_to = { *_n_beg, *_s_beg };
    }
 }
-
-
 #pragma endregion
 
 #pragma region >>> Обработка ввода вывода
@@ -153,26 +154,77 @@ istream& operator>>(istream& is, Data& d) {
 }
 #pragma endregion
 
+#pragma region >>> Изменение свойств объектов
+struct TexModify {
+   string& file;
+   int& width;
+   int& height;
+
+   TexModify (Data& _data, size_t index) :
+      file   (get<0>(get<0>(_data)[index])),
+      width  ((get<1>(get<0>(_data)[index]).first)),
+      height ((get<1>(get<0>(_data)[index]).second))
+   {}
+};
+
+struct LayerModify {
+   Point&  position;
+   Point&  size;
+   Point&  offset;
+   int&    atlas;
+   string& name;
+
+   LayerModify(Data& _data, size_t index) :
+      position (get<0>(get<1>(_data)[index])),
+      size     (get<1>(get<1>(_data)[index])),
+      offset   (get<2>(get<1>(_data)[index])),
+      atlas    (get<3>(get<1>(_data)[index])),
+      name     (get<4>(get<1>(_data)[index]))
+   {}
+};
+
+struct DataModify {
+   Texs& _texs;
+   Layers& _layers;
+
+   DataModify(Data& data) :
+      _texs(get<0>(data)),
+      _layers(get<1>(data))
+   {}
+};
+#pragma endregion
+
 int main() {
-   //Texs _texs = {
-   //   { "Tex_1.tex", {10, 50} },
-   //   { "Tex_2.tex", {15, 55} },
-   //   { "Tex_3.tex", {20, 60} },
-   //   { "Tex_4.tex", {25, 65} }
-   //};
-   //Layers ls = {
-   //   { {0, 0}, {10, 10}, {0, 0}, 0, "frame0" },
-   //   { {0, 1}, {10, 10}, {0, 0}, 0, "frame1" },
-   //   { {0, 2}, {10, 10}, {0, 0}, 0, "frame2" },
-   //};
-   //
-   //Data data { _texs, ls };
-   Data data {};
-   ifstream file { "test.txt" };
-   file >> data;
+   // Пример использования
 
-   cout << data;
+   Texs _texs = {
+      { "Tex_1.tex", {10, 50} }, // у этого изменим имя файла на NewFile.tex
+      { "Tex_2.tex", {15, 55} },
+      { "Tex_3.tex", {20, 60} },
+      { "Tex_4.tex", {25, 65} } // этот удалим
+   };
+   Layers ls = {
+      { {0, 0}, {10, 10}, {0, 0}, 0, "frame0" },
+      { {0, 1}, {10, 10}, {0, 0}, 0, "frame1" }, // этот будем менять frame1 -> newName
+      { {0, 2}, {10, 10}, {0, 0}, 0, "frame2" },
+   };
+   
+   Data data { _texs, ls };
+   
+   /* Редактирование */
+   {
+      LayerModify l_1 { data, 1 };
+      l_1.name = "newName";
 
-   file.close();
+      TexModify t_0 { data, 0 };
+      t_0.file = "NewFile.tex";
+
+      DataModify dm { data };
+      dm._texs.pop_back();
+   }
+
+   // вывод
+   std::cout << data;
+
    return 0;
 }
