@@ -1,3 +1,44 @@
+/*
+    Данный файл содержит код для работы с текстовыми фалами,
+    используемыми в World of Tanks Blitz.
+
+      Структура такого файла:
+      <кол-во атласов> N\r\n
+      <имена атласов> Name1.tex\r\n ...\r\n NameN.tex\r\n
+      <размеры атласов> 100 100\r\n... ...\r\n
+      <кол-во слоев> Nl\r\n
+      <описание слоев>0 0 0 0 0 0 0 0
+      
+      Пример:
+      1
+      Name.tex
+      10 10
+      1
+      0 0 10 10 0 0 0 0
+      
+      Имена атласов 
+        - это имя изображения до первой точки. Формат описывается как tex.
+          По одному имени на строку. Имен ровно столько, сколько указано в первой строчке.
+      Размер атласов 
+        - это два числа через пробел на одно строке.
+          строк столько же, стколько имен атласов
+      Слой
+        - это описание спрайта на общем атласе с щепоткой параметров для отображения.
+          Один слой на строку. (однако, если дадите программе буфер, где весь файл в одну строку,
+          и параметры разделены пробелом, то буфер также корректно будет прочитан в Data)
+          Параметры для слоя
+            - первая пара чисел через пробел - позиция спрайта на общем атласе
+            - вторая пара через пробел - размер спрайта
+            - третья пара - центр спрайта
+            - число - номер атласа, на котором расположен спрайт (не более чем подключено атласов)
+            - последний параметр может быть числом, а может строкой - номер слоя. 
+              когда описан строкой - "frame0" - 0 означает первый слой.
+              
+    Для простейшего применения данного кода необходим файл со структурой выше.
+    Можно открыть поток чтения файла и прочитать сразу в Data.
+    Чтобы редактировать полученные данные, необходимо использовать соответствующие структуры.
+    Вывод обратно в файл также прост, как и чтение.
+*/
 
 #include <cmath>
 #include <ctime>
@@ -10,21 +51,23 @@
 #include <sstream>
 #include <variant>
 #include <iterator>
+#include <queue>
 #include <iostream>
 #include <optional>
 #include <algorithm>
 #include <functional>
 
-using Dir = std::filesystem::path;
+using namespace std;
+//using Dir = std::filesystem::path;
 
-using Point  = pair<int, int>;
-using _tex   = tuple<string, Point>;
-using _layer = tuple<Point, Point, Point, int, string>;
-using Points = vector<Point>;
-using Names  = vector<string>;
-using Texs   = vector<_tex>;
-using Layers = vector<_layer>;
-using Data   = tuple<Texs, Layers>;
+using Point  = pair<int, int>;                          // для описания размеров и позиций
+using _tex   = tuple<string, Point>;                    // описание атласа (имя и размер)
+using _layer = tuple<Point, Point, Point, int, string>; // описание слоя
+using Points = vector<Point>;                           // набор размеров или позиций
+using Names  = vector<string>;                          // набор имен атласов (необходим для вывода списка атласов)
+using Texs   = vector<_tex>;                            // набор атласов
+using Layers = vector<_layer>;                          // набор слоев
+using Data   = tuple<Texs, Layers>;                     // описание всего файла
 
 #pragma region >>> Вспомогательные функции
 /* 
@@ -52,6 +95,8 @@ void Unpack_Texs (
 
 /* 
    Упаковывает размеры и имена атласов из пакета имен и пакета размеров
+   Необходимо учитывать, что упаковка производится в уже созданные элементы.
+   Если пункт назначения - пустой список, то возникнет исключение
    >> _names   ---> пакет имен
    >> _sizes   ---> пакет размеров
    >> where_to ---> пункт назначения запакованных структур
@@ -155,25 +200,38 @@ istream& operator>>(istream& is, Data& d) {
 #pragma endregion
 
 #pragma region >>> Изменение свойств объектов
+/*
+  Редактирование описания одного атласа.
+*/
 struct TexModify {
-   string& file;
-   int& width;
-   int& height;
+   string& file; // имя атласа
+   int& width;   // ширина
+   int& height;  // высота
 
+   /*
+      _data >>> редактируемый объект
+      index >>> номер редактируемого атласа
+   */
    TexModify (Data& _data, size_t index) :
       file   (get<0>(get<0>(_data)[index])),
       width  ((get<1>(get<0>(_data)[index]).first)),
       height ((get<1>(get<0>(_data)[index]).second))
    {}
 };
-
+/*
+  Изменение параметров выбранного слоя
+*/
 struct LayerModify {
-   Point&  position;
-   Point&  size;
-   Point&  offset;
-   int&    atlas;
-   string& name;
+   Point&  position; // позиция спрайта
+   Point&  size;     // размер спрайта
+   Point&  offset;   // центр
+   int&    atlas;    // номер атласа
+   string& name;     // описание
 
+   /*
+      _data >>> редактируемый объект
+      index >>> номер изменяемого слоя
+   */
    LayerModify(Data& _data, size_t index) :
       position (get<0>(get<1>(_data)[index])),
       size     (get<1>(get<1>(_data)[index])),
@@ -182,7 +240,9 @@ struct LayerModify {
       name     (get<4>(get<1>(_data)[index]))
    {}
 };
-
+/*
+  Редактирование списка слоев и атласов
+*/
 struct DataModify {
    Texs& _texs;
    Layers& _layers;
@@ -196,13 +256,17 @@ struct DataModify {
 
 int main() {
    // Пример использования
-
+   // создание, редактирование и вывод
+   
+   // набор атласов с размерами
    Texs _texs = {
       { "Tex_1.tex", {10, 50} }, // у этого изменим имя файла на NewFile.tex
       { "Tex_2.tex", {15, 55} },
       { "Tex_3.tex", {20, 60} },
-      { "Tex_4.tex", {25, 65} } // этот удалим
+      { "Tex_4.tex", {25, 65} }  // этот удалим
    };
+   
+   // набор списка слоев
    Layers ls = {
       { {0, 0}, {10, 10}, {0, 0}, 0, "frame0" },
       { {0, 1}, {10, 10}, {0, 0}, 0, "frame1" }, // этот будем менять frame1 -> newName
