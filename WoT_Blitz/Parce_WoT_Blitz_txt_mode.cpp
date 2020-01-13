@@ -7,7 +7,7 @@
 
 using namespace std;
 
-#pragma region >>> Обработка ввода вывода
+#pragma region >>> обработка ввода вывода
 namespace std {
    istream& operator>>(istream& is, Point& p) {
       is >> p.first >> p.second;
