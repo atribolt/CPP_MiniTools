@@ -5,18 +5,23 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <filesystem>
 
-using Point  = std::pair<int, int>;
-using _tex   = std::tuple<std::string, Point>;
-using _layer = std::tuple<Point, Point, Point, int, std::string>;
-using Points = std::vector<Point>;
-using Names  = std::vector<std::string>;
-using Texs   = std::vector<_tex>;
-using Layers = std::vector<_layer>;
-using Data   = std::tuple<Texs, Layers>;
+using Point       = std::pair<int, int>;
+using _tex        = std::tuple<std::string, Point>;
+using _layer      = std::tuple<Point, Point, Point, int, std::string>;
+using Points      = std::vector<Point>;
+using Names       = std::vector<std::string>;
+using Texs        = std::vector<_tex>;
+using Layers      = std::vector<_layer>;
+using Data        = std::tuple<Texs, Layers>;
+using Path        = std::filesystem::path;
+using PathAtlases = std::vector<Path>;
+
+class DataManager;
 
 namespace std {
-   /* Необходимы в std для поддержки алгоритмами stl */
+   /* РќРµРѕР±С…РѕРґРёРјС‹ РІ std РґР»СЏ РїРѕРґРґРµСЂР¶РєРё Р°Р»РіРѕСЂРёС‚РјР°РјРё stl */
 
    istream& operator>>(istream&, Point&);
    istream& operator>>(istream&, _layer&);
@@ -25,6 +30,7 @@ namespace std {
    ostream& operator<<(ostream&, const Point&)  noexcept;
    ostream& operator<<(ostream&, const _layer&) noexcept;
 }
+std::ostream& operator<<(std::ostream&, const DataManager&) noexcept;
 std::ostream& operator<<(std::ostream&, const Data&) noexcept;
 std::ostream& operator<<(std::ostream&, const Texs&) noexcept;
 std::ostream& operator<<(std::ostream&, const Layers&) noexcept;
@@ -33,7 +39,7 @@ std::istream& operator>>(std::istream&, Data&);
 std::istream& operator>>(std::istream&, Texs&);
 std::istream& operator>>(std::istream&, Layers&);
 
-/* распаковывает пакет с парами имен и размеров атласов в пакет имен и пакет размеров */
+/* СЂР°СЃРїР°РєРѕРІС‹РІР°РµС‚ РїР°РєРµС‚ СЃ РїР°СЂР°РјРё РёРјРµРЅ Рё СЂР°Р·РјРµСЂРѕРІ Р°С‚Р»Р°СЃРѕРІ РІ РїР°РєРµС‚ РёРјРµРЅ Рё РїР°РєРµС‚ СЂР°Р·РјРµСЂРѕРІ */
 template<class _out_name, class _out_size>
 void Unpack_Texs (
    Texs::const_iterator src_beg,
@@ -42,7 +48,7 @@ void Unpack_Texs (
    _out_size dst_sizes          
 );
 
-/* Упаковывает размеры и имена атласов из пакета имен и пакета размеров */
+/* РЈРїР°РєРѕРІС‹РІР°РµС‚ СЂР°Р·РјРµСЂС‹ Рё РёРјРµРЅР° Р°С‚Р»Р°СЃРѕРІ РёР· РїР°РєРµС‚Р° РёРјРµРЅ Рё РїР°РєРµС‚Р° СЂР°Р·РјРµСЂРѕРІ */
 template<class _it_where>
 void Pack_Texs(
    const Names&  src_names,
@@ -50,7 +56,7 @@ void Pack_Texs(
    _it_where     dst_texs  
 );
 
-/* Редактирование отдельного атласа */
+/* Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ РѕС‚РґРµР»СЊРЅРѕРіРѕ Р°С‚Р»Р°СЃР° */
 struct TexModify {
    std::string& file;
    int& width;
@@ -59,7 +65,7 @@ struct TexModify {
    TexModify(Data&, size_t);
 };
 
-/* Редактирование отдельного слоя */
+/* Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ РѕС‚РґРµР»СЊРЅРѕРіРѕ СЃР»РѕСЏ */
 struct LayerModify {
    Point&  position;
    Point&  size;
@@ -70,11 +76,64 @@ struct LayerModify {
    LayerModify(Data&, size_t);
 };
 
-/* Редактирование списка атласов и слоев */
+/* Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЃРїРёСЃРєР° Р°С‚Р»Р°СЃРѕРІ Рё СЃР»РѕРµРІ */
 struct DataModify {
    Texs& _texs;
    Layers& _layers;
 
    DataModify(Data&);
 };
-#endif
+
+class DataManager {
+   friend  std::ostream& operator<<(std::ostream&, const DataManager&) noexcept;
+
+   Path        _work_directory;
+   PathAtlases _atlas_images;
+
+   size_t 
+      _current_layer,
+      _current_atlas;
+
+   mutable Data _data;
+   bool _error_flag;
+
+   template<class T>
+   bool TestIndex(T& _elem, size_t index) noexcept;
+public:
+   DataManager(const Path& path) noexcept;
+
+#pragma region >>> РЈРїСЂР°РІР»РµРЅРёРµ СЃР»РѕРµРј
+   /** РџРµСЂРµРјРµС‰РµРЅРёРµ С†РµРЅС‚СЂР° */
+   void MoveTile(int dx, int dy) noexcept;
+
+   /** РЈСЃС‚Р°РЅРѕРІРєР° РЅРѕРІРѕРіРѕ С†РµРЅС‚СЂР° РґР»СЏ С‚Р°Р№Р»Р° */
+   void Center(int x, int y) noexcept;
+   /** РўРµРєСѓС‰РёР№ С†РµРЅС‚СЂ С‚Р°Р№Р»Р° */
+   const Point& Center() const noexcept;
+
+   /** РЈСЃС‚Р°РЅРѕРІРєР° РЅРѕРІРѕР№ РїРѕР·РёС†РёРё С‚Р°Р№Р»Р° РЅР° Р°С‚Р»Р°СЃРµ */
+   void Position(int x, int y) noexcept;
+   /** РўРµРєСѓС‰Р°СЏ РїРѕР·РёС†РёСЏ С‚Р°Р№Р»Р° РЅР° Р°С‚Р»Р°СЃРµ */
+   const Point& Position() const noexcept;
+
+   /** РЈСЃС‚Р°РЅРѕРІРєР° СЂР°Р·РјРµСЂР° С‚Р°Р№Р»Р° */
+   void Size(int width, int height) noexcept;
+   /** РўРµРєСѓС‰РёР№ СЂР°Р·РјРµСЂ С‚Р°Р№Р»Р° */
+   const Point& Size() const noexcept;
+
+   /** РўРµРєСѓС‰РёР№ СЃР»РѕР№ С‚РµРєСЃС‚РѕРј */
+   std::string CurentLayer() const noexcept;
+#pragma endregion
+
+
+   /** Р’С‹Р±РѕСЂ Р°С‚Р»Р°СЃР° */
+   bool ChangeTex(size_t index) noexcept;
+   /** Р’С‹Р±РѕСЂ СЃР»РѕСЏ */
+   bool ChangeLayer(size_t index) noexcept;
+
+   Path CurrentAtlas() const noexcept;
+
+   Names AllLayers() const noexcept;
+};
+
+#endif // WOT_MODIFY_DATA_H
