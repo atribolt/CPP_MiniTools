@@ -8,6 +8,7 @@
 #include <functional>
 
 using namespace std;
+static Point ZERO { 0, 0 };
 
 static tm __fastcall TimeNow() {
    time_t _sec {0};
@@ -226,7 +227,7 @@ void DataManager::Center(int x, int y) noexcept {
 }
 
 const Point& DataManager::Center() const noexcept {
-   return (!_error_flag) ? LayerModify(_data, _current_layer).offset : Point();
+   return (!_error_flag) ? get<3>(get<1>(_data)[_current_layer]) : ZERO;
 }
 
 void DataManager::Position(int x, int y) noexcept {
@@ -240,7 +241,7 @@ void DataManager::Position(int x, int y) noexcept {
 }
 
 const Point& DataManager::Position() const noexcept {
-   return (!_error_flag) ? LayerModify(_data, _current_layer).position : Point();
+   return (!_error_flag) ? get<0>(get<1>(_data)[_current_layer]) : ZERO;
 }
 
 void DataManager::Size(int width, int height) noexcept {
@@ -254,7 +255,7 @@ void DataManager::Size(int width, int height) noexcept {
 }
 
 const Point& DataManager::Size() const noexcept {
-   return (!_error_flag) ? LayerModify(_data, _current_layer).size : Point();
+   return (!_error_flag) ? get<1>(get<1>(_data)[_current_layer]) : ZERO;
 }
 
 string DataManager::CurentLayer() const noexcept {
