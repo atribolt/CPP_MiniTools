@@ -33,12 +33,81 @@ namespace Math {
          }
    }
 
+
+   template<class T, size_t step = 1>
+      class mat_iterator : public std::random_access_iterator_tag {
+      public:
+         using value_type = T;
+
+         mat_iterator() {}
+         mat_iterator(T* data) noexcept : data(data) {}
+
+         value_type& operator*() { return *data; }
+         auto& operator++() {
+            data += step;
+            return *this;
+         }
+
+         const value_type& operator[](size_t index) const {
+            return *(data + (step * index));
+         }
+
+         auto& operator--() {
+            data -= step;
+            return *this;
+         }
+
+         auto operator+(int i) {
+            mat_iterator res = *this;
+            res.data += (i * step);
+            return res;
+         }
+         auto operator-(int i) {
+            mat_iterator res = *this;
+            res.data -= (i * step);
+            return res;
+         }
+         bool operator==(const mat_iterator& b) const { return data == b.data; }
+         bool operator!=(const mat_iterator& b) const { return data != b.data; }
+      private:
+         value_type* data { nullptr };
+      };
+
+   template<class T, size_t step>
+      class Vector {
+      public:
+         using value_type = T;
+
+         Vector(size_t size) {
+            Resize(size);
+         }
+         Vector(mat_iterator<T, step> begn, size_t size) {
+            beg = begn;
+            Resize(size);
+         }
+
+         auto begin() const { return beg; }
+         auto end()   const { return beg + Size(); }
+
+         auto& operator[](size_t index) { return beg[index]; }
+
+         auto Size() const { return size; }
+         void Resize(size_t now) { size = now; }
+      private:
+         size_t                         size;
+         mat_iterator<value_type, step> beg;
+      };
    template<class val_t, size_t row, size_t col>
       class Matrix {
       public:
          using value_type = val_t;
 
       public:
+         using row_iterator = mat_iterator<value_type,   1>;
+         using col_iterator = mat_iterator<value_type, col>;
+         using row_iter_c   = const row_iterator;
+         using col_iter_c   = const col_iterator;
+
          Matrix() {}
 
          value_type& operator[](Point elem) { 
@@ -48,11 +117,31 @@ namespace Math {
             return data[elem.y * col + elem.x];
          }
 
-         value_type* begin() {
-            return data;
+         auto begin() {
+            return mat_iterator( data );
          }
-         value_type* end() {
-            return data + row * col;
+         auto end() {
+            return mat_iterator( data + (col * row) );
+         }
+
+         auto beg_row(size_t index) {
+            return row_iterator(data + index * col);
+         }
+         auto beg_col(size_t index) {
+            return col_iterator(data + index);
+         }
+         auto end_row(size_t index) {
+            return row_iterator(data + index * col + col);
+         }
+         auto end_col(size_t index) {
+            return col_iterator(data + index + col * row);
+         }
+
+         auto Row(size_t index) {
+            return Vector<value_type, 1>(beg_row(index), col);
+         }
+         auto Column(size_t index) {
+            return Vector<value_type, col>(beg_col(index), row);
          }
 
          template<class _T>
@@ -64,7 +153,7 @@ namespace Math {
          template<class _T>
             Matrix& operator=(const _T(&dat)[row][col]) {
                for (size_t i = 0; i < row; ++i) {
-                  std::memcpy(data + i * col, dat[i], sizeof(value_type) * col);
+                  data[i] = dat[i / col][i % col];
                }
                return *this;
             }
@@ -72,7 +161,7 @@ namespace Math {
          template<class _T>
             Matrix& operator=(_T(&&dat)[row][col]) {
                for (size_t i = 0; i < row; ++i) {
-                  std::memmove(data + i * col, dat[i], sizeof(value_type) * col);
+                  std::swap(data[i], dat[i / col][i % col]);
                }
                return *this;
             }
@@ -174,6 +263,9 @@ namespace Math {
             return res;
          }
 
+         auto operator[](size_t column) { return col_iterator(column); }
+         auto operator[](size_t column) const { return col_iter_c(column); }
+
          template<class Result = double>
             Result M(Point e) const {
                return Remove(e).Det();
@@ -199,7 +291,46 @@ namespace Math {
       private:
          value_type data[row * col];
       };
+
+      enum class TypeIter {
+         Row, Col
+      };
+
+      
+
+      template<class At, class Bt, size_t stepA, size_t stepB>
+         At operator*(Vector<At, stepA> a, Vector<Bt, stepB> b) {
+            At res = 0;
+
+            for (size_t i = 0; i < a.Size(); ++i) {
+               res += a[i] * static_cast<At>(b[i]);
+            }
+
+            return res;
+         }
+      template<class At, size_t stepA, class Iter>
+         At operator*(Vector<At, stepA> a, Iter it) {
+            At res = 0;
+
+            for (size_t i = 0; i < a.Size(); ++i, ++it) {
+               res += a[i] * static_cast<At>(*it);
+            }
+
+            return res;
+         }
+      template<class At, size_t stepA, class Iter>
+         At operator*(Iter it, Vector<At, stepA> a) {
+            At res = 0;
+
+            for (size_t i = 0; i < a.Size(); ++i, ++it) {
+               res += a[i] * static_cast<At>(*it);
+            }
+
+            return res;
+         }
+
 }
+
 
 //
 //using namespace std;
